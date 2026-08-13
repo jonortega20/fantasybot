@@ -125,17 +125,24 @@ def review(client, days_to_matchday=None):
     events = state.diff_snapshots(prev, curr)
     state.save_snapshot(curr)
 
-    # 2) lineup
-    best = lineup_opt.optimize(team, prob_index)
-    best_ids = lineup_opt.payload_ids(best)
-    lineup_changed = best_ids != _current_xi_ids(client, tid)
+    # 2) lineup (squad may be temporarily too thin for any valid formation,
+    # e.g. early season / after sales — degrade gracefully instead of crashing)
+    try:
+        best = lineup_opt.optimize(team, prob_index)
+        best_ids = lineup_opt.payload_ids(best)
+        lineup_changed = best_ids != _current_xi_ids(client, tid)
+        lineup_error = None
+    except ValueError as e:
+        best = None
+        lineup_changed = False
+        lineup_error = str(e)
 
     # 3) flips, needs and sales
     flips = [o for o in flip.opportunities(client, lid)
              if o["margin_pct"] > 0 and o["buy_price"] <= team["teamMoney"]][:5]
     gaps = needs_mod.gaps(team)
     needs_report = needs_mod.advise(client, lid, team, days_to_matchday)
-    sells = sell_mod.sell_candidates(team, best, trends_index())
+    sells = sell_mod.sell_candidates(team, best, trends_index()) if best else []
 
     # 4) buyout targets + reminders
     targets = clause_targets(market, team, prob_index)
@@ -178,8 +185,9 @@ def review(client, days_to_matchday=None):
         "events": events,
         "money": team["teamMoney"],
         "matchday": {"kickoff": kickoff, "days": days_to_matchday},
-        "lineup": {"formation": best["formation"], "changed": lineup_changed,
-                   "total": best["total"], "watch": best.get("watch", [])},
+        "lineup": ({"formation": best["formation"], "changed": lineup_changed,
+                    "total": best["total"], "watch": best.get("watch", [])}
+                   if best else {"error": lineup_error}),
         "flips": flips,
         "gaps": gaps,
         "needs": needs_report,

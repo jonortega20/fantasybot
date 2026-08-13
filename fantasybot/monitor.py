@@ -47,9 +47,15 @@ def _insights():
     if not shutil.which("hermes"):
         return {"available": False}
     try:
+        # `hermes insights` may print non-ASCII (emoji, box-drawing) that the
+        # console's default codepage (e.g. cp1252 on Windows) can't decode;
+        # force UTF-8 and never let a stray byte blow up the reader thread.
         out = subprocess.run(["hermes", "insights", "--days", "1"],
-                             capture_output=True, text=True, timeout=20).stdout
+                             capture_output=True, text=True, timeout=20,
+                             encoding="utf-8", errors="replace").stdout
     except (OSError, subprocess.SubprocessError):
+        return {"available": False}
+    if not out:
         return {"available": False}
 
     def grab(label):
@@ -63,6 +69,32 @@ def _insights():
             "total_tokens": grab("Total tokens"),
             "output_tokens": grab("Output tokens"),
             "active_time": tm.group(1) if tm else None}
+
+
+def trigger(mode):
+    """Runs one agent cycle in a background thread, guarded by `_RUNNING` so a
+    concurrent trigger (CLI --run/--hermes racing the UI's own button, or two
+    `watch` processes pointed at the same team) can't fire a second real cycle
+    on top of one already in flight. Returns False if one was already running.
+    """
+    global _RUNNING
+    if _RUNNING:
+        return False
+
+    def go():
+        global _RUNNING
+        try:
+            if mode == "hermes":
+                subprocess.run(["hermes", "-z", HERMES_PROMPT,
+                                "--skill", "fantasy-manager"])
+            else:
+                subprocess.run([sys.executable, "-m", "fantasybot", "agent", "--execute"])
+        finally:
+            _RUNNING = False
+
+    _RUNNING = True
+    threading.Thread(target=go, daemon=True).start()
+    return True
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -98,24 +130,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _run(self):
         """Launches the real agent cycle (the 'Launch agent' button)."""
-        global _RUNNING
-        if _RUNNING:
-            return self._send(409, "application/json", b'{"error":"already running"}')
         mode = getattr(self.server, "run_mode", "agent")
-
-        def go():
-            global _RUNNING
-            try:
-                if mode == "hermes":
-                    subprocess.run(["hermes", "-z", HERMES_PROMPT,
-                                    "--skill", "fantasy-manager"])
-                else:
-                    subprocess.run([sys.executable, "-m", "fantasybot", "agent", "--execute"])
-            finally:
-                _RUNNING = False
-
-        _RUNNING = True
-        threading.Thread(target=go, daemon=True).start()
+        if not trigger(mode):
+            return self._send(409, "application/json", b'{"error":"already running"}')
         self._send(202, "application/json", b'{"ok":true}')
 
     def _page(self):

@@ -187,7 +187,9 @@ def cmd_agent(args):
     events.emit("review", f"Review: {cambios}",
                 detail={"balance": f"{rep['money']:,}",
                         "flips": len(rep.get("flips", [])),
-                        "lineup": "change" if rep["lineup"]["changed"] else "already optimal"})
+                        "lineup": ("change" if rep["lineup"].get("changed")
+                                    else ("error" if rep["lineup"].get("error")
+                                          else "already optimal"))})
 
     if args.json:
         return _print_json(rep)
@@ -217,12 +219,15 @@ def cmd_agent(args):
         print(f"Next matchday: {md['kickoff']}"
               + (f"  ({dias:.1f} days left)" if dias is not None else ""))
     lu = rep["lineup"]
-    d, m, f = lu["formation"]
-    tag = "  (WORTH CHANGING)" if lu["changed"] else "  (already the best)"
-    print(f"Optimal lineup: {d}-{m}-{f}{tag}")
-    for w in lu.get("watch", []):
-        print(f"  ⚠ {w['nombre']} ({w['valor']:,}) outside the likely XI "
-              f"— transfer/injury? watch (sell?)")
+    if lu.get("error"):
+        print(f"\nOptimal lineup: NOT AVAILABLE ({lu['error']})")
+    else:
+        d, m, f = lu["formation"]
+        tag = "  (WORTH CHANGING)" if lu["changed"] else "  (already the best)"
+        print(f"Optimal lineup: {d}-{m}-{f}{tag}")
+        for w in lu.get("watch", []):
+            print(f"  ⚠ {w['nombre']} ({w['valor']:,}) outside the likely XI "
+                  f"— transfer/injury? watch (sell?)")
 
     if rep["flips"]:
         print("\nFlip opportunities (buy to resell):")
@@ -356,7 +361,6 @@ def cmd_watch(args):
     - `--hermes`   triggers the Hermes brain with the skill (LLM), if installed.
     Without flags, it just monitors: you'll see the next cron cycle live.
     """
-    import subprocess
     import threading
     import webbrowser
     from . import monitor
@@ -369,11 +373,10 @@ def cmd_watch(args):
 
     def fire():
         time.sleep(1.2)  # let the UI connect the stream before starting
-        if args.hermes:
-            subprocess.run(["hermes", "-z", monitor.HERMES_PROMPT,
-                            "--skill", "fantasy-manager"])
-        elif args.run:
-            subprocess.run([sys.executable, "-m", "fantasybot", "agent", "--execute"])
+        # Goes through monitor.trigger() so this can't race a concurrent
+        # "Launch agent" button click (or a second watch process) into
+        # firing two real agent cycles at once.
+        monitor.trigger("hermes" if args.hermes else "agent")
 
     if args.run or args.hermes:
         threading.Thread(target=fire, daemon=True).start()
