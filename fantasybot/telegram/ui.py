@@ -174,21 +174,51 @@ def history_keyboard(managers: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 # --- Text formatters ---
 
+# --- Text Formatters (Mobile-First & Clean Cards) ---
+
+def fmt_eur(amount: Optional[int], compact: bool = False) -> str:
+    if amount is None:
+        return "0 €"
+    if compact:
+        if abs(amount) >= 1_000_000:
+            return f"{amount / 1_000_000:.1f}M €".replace(".", ",")
+        elif abs(amount) >= 1_000:
+            return f"{amount / 1_000:.0f}k €"
+    # Spanish format: 1.234.567 €
+    s = f"{amount:,}".replace(",", ".")
+    return f"{s} €"
+
+
 def format_team(team_data: Dict[str, Any]) -> str:
+    players = team_data.get("players", [])
+    t_val = team_data.get("teamValue", 0)
+    t_money = team_data.get("teamMoney", 0)
+
     lines = [
         f"📋 <b>Mi Plantilla: {team_data.get('name', 'Equipo')}</b>",
-        f"💰 <b>Valor:</b> {team_data.get('teamValue', 0):,} € | <b>Saldo:</b> {team_data.get('teamMoney', 0):,} €",
-        f"👥 <b>Jugadores:</b> {len(team_data.get('players', []))}\n",
-        "<code>POS JUGADOR            VALOR      CLÁUSULA</code>",
-        "<code>" + "─" * 46 + "</code>"
+        f"💰 <b>Valor:</b> {fmt_eur(t_val)}  |  🏦 <b>Saldo:</b> {fmt_eur(t_money)}",
+        f"👥 <b>Total:</b> {len(players)} jugadores\n"
     ]
-    for p in sorted(team_data.get("players", []), key=lambda x: -(x.get("playerMaster", {}).get("marketValue") or 0)):
-        pm = p.get("playerMaster") or {}
-        pos = POS.get(pm.get("positionId"), "?")
-        name = (pm.get("nickname") or pm.get("name") or "Unknown")[:16]
-        mv = pm.get("marketValue") or 0
-        clause = p.get("buyoutClause") or 0
-        lines.append(f"<code>{pos:<4}{name:<17}{mv:>11,}{clause:>14,}</code>")
+
+    by_pos = {1: ("🧤 PORTEROS", []), 2: ("🛡 DEFENSAS", []), 3: ("🎯 CENTROCAMPISTAS", []), 4: ("⚡ DELANTEROS", [])}
+    for p in players:
+        pm = p.get("playerMaster", {})
+        pos_id = pm.get("positionId", 1)
+        if pos_id in by_pos:
+            by_pos[pos_id][1].append(p)
+
+    for pos_id in (1, 2, 3, 4):
+        header, plist = by_pos[pos_id]
+        if plist:
+            lines.append(f"<b>{header} ({len(plist)})</b>")
+            plist.sort(key=lambda x: -(x.get("playerMaster", {}).get("marketValue") or 0))
+            for p in plist:
+                pm = p.get("playerMaster", {})
+                name = pm.get("nickname") or pm.get("name") or "Jugador"
+                mv = pm.get("marketValue") or 0
+                clause = p.get("buyoutClause") or 0
+                lines.append(f"• <b>{name}</b>: {fmt_eur(mv)} <i>(Cláusula: {fmt_eur(clause, compact=True)})</i>")
+            lines.append("")
 
     return "\n".join(lines)
 
@@ -200,37 +230,60 @@ def format_rivals_summary(rivals: List[Dict[str, Any]]) -> str:
 
     lines = [
         "⚔️ <b>Finanzas y Presupuesto de Rivales</b>",
-        f"📦 <i>Historial: {events_count} operaciones ({d_from} a {d_to})</i>\n",
-        "<code>#  MANAGER        EQUIPO      NETO    EST. CASH</code>",
-        "<code>" + "─" * 47 + "</code>"
+        f"📦 <i>Historial: {events_count} operaciones ({d_from} a {d_to})</i>\n"
     ]
-    for r in rivals:
-        is_me = " (tú)" if r["is_me"] else ""
-        name = (r["manager_name"][:11] + is_me)[:13]
-        pos = f"#{r['position']}" if r["position"] else "-"
-        tv = r["team_value"] // 1_000_000
-        net = r["net_profit"] // 1_000_000
-        cash = r["estimated_balance"] // 1_000_000
-        lines.append(f"<code>{pos:<3}{name:<14}{tv:>5}M{net:>+6}M{cash:>8}M</code>")
 
-    lines.append("\n<i>💡 Pulsa en cualquier rival abajo para ver su plantilla y blindajes.</i>")
+    medals = ["🥇", "🥈", "🥉"]
+    for idx, r in enumerate(rivals, 1):
+        is_me = " <b>(TÚ)</b>" if r.get("is_me") else ""
+        badge = medals[idx - 1] if idx <= 3 else f"<b>#{idx}</b>"
+        name = r.get("manager_name", "Manager")
+        tv = r.get("team_value", 0)
+        cash = r.get("estimated_balance", 0)
+        net = r.get("net_profit", 0)
+        net_sign = "+" if net >= 0 else ""
+
+        lines.append(
+            f"{badge} <b>{name}</b>{is_me}\n"
+            f"  • 💰 <b>Saldo Est.:</b> ~{fmt_eur(cash)}\n"
+            f"  • 👥 <b>Plantilla:</b> {fmt_eur(tv)} ({len(r.get('players', []))} jug.)\n"
+            f"  • 📈 <b>Neto Fichajes:</b> {net_sign}{fmt_eur(net)}\n"
+        )
+
+    lines.append("<i>💡 Pulsa en cualquier botón abajo para ver la plantilla de un rival.</i>")
     return "\n".join(lines)
 
 
 def format_rival_detail(r: Dict[str, Any]) -> str:
-    profit_sign = "+" if r["net_profit"] >= 0 else ""
+    profit_sign = "+" if r.get("net_profit", 0) >= 0 else ""
     lines = [
-        f"👤 <b>Manager: {r['manager_name']}</b> (#{r['position']} - {r['points']} pts)",
-        f"💰 <b>Valor Equipo:</b> {r['team_value']:,} € | <b>Saldo Est.:</b> ~{r['estimated_balance']:,} €",
-        f"🛒 <b>Compras:</b> {r['purchases']:,} € | <b>Ventas:</b> {r['sales']:,} € (Neto: {profit_sign}{r['net_profit']:,} €)\n",
-        "<code>JUGADOR          POS       COMPRA        VALOR   PROFIT/LOSS</code>",
-        "<code>" + "─" * 60 + "</code>"
+        f"👤 <b>Rival: {r.get('manager_name')}</b> (#{r.get('position')} - {r.get('points', 0)} pts)",
+        f"💰 <b>Valor Equipo:</b> {fmt_eur(r.get('team_value', 0))}  |  🏦 <b>Saldo Est.:</b> ~{fmt_eur(r.get('estimated_balance', 0))}",
+        f"🛒 <b>Compras:</b> {fmt_eur(r.get('purchases', 0))}  |  🏷 <b>Ventas:</b> {fmt_eur(r.get('sales', 0))} ({profit_sign}{fmt_eur(r.get('net_profit', 0))})\n",
+        "👥 <b>JUGADORES EN PLANTILLA:</b>\n"
     ]
-    for p in r.get("players", []):
-        bought = f"{p['bought_price']:,}" if not p["is_initial"] else "(Inicial)"
-        diff_sign = "+" if p["diff"] >= 0 else ""
-        gain = f"{diff_sign}{p['diff']:,}" if not p["is_initial"] else "-"
-        lines.append(f"<code>{p['name'][:14]:<15}{p['pos']:<4}{bought:>12}{p['market_value']:>13,}{gain:>16}</code>")
+
+    players = r.get("players", [])
+    if not players:
+        lines.append("<i>(Sin jugadores registrados)</i>")
+    else:
+        for p in players:
+            name = p.get("name", "Jugador")
+            pos = p.get("pos", "?")
+            mv = p.get("market_value", 0)
+            diff = p.get("diff", 0)
+            diff_sign = "+" if diff >= 0 else ""
+            if p.get("is_initial"):
+                lines.append(f"• <b>{name}</b> ({pos})\n  💵 Fichaje: <i>(Inicial)</i> → Vale: {fmt_eur(mv)}")
+            else:
+                bp = p.get("bought_price", 0)
+                roi = (diff / bp * 100) if bp else 0
+                lines.append(
+                    f"• <b>{name}</b> ({pos})\n"
+                    f"  💵 Compra: {fmt_eur(bp)} → Vale: {fmt_eur(mv)}\n"
+                    f"  📈 Ganancia: <b>{diff_sign}{fmt_eur(diff)}</b> ({roi:+.1f}%)"
+                )
+            lines.append("")
 
     return "\n".join(lines)
 
@@ -239,92 +292,110 @@ def format_history_summary(report: Dict[str, Any]) -> str:
     managers = report.get("managers", [])
     lines = [
         "📊 <b>Ranking de Especulación y Rentabilidad (Flips)</b>",
-        f"📦 <i>{report.get('tracked_events', 0)} operaciones ({report.get('tracked_from')} a {report.get('tracked_to')})</i>\n",
-        "<code>#  MANAGER        TOTAL P&L   FLIPS  WIN%   AVG ROI</code>",
-        "<code>" + "─" * 49 + "</code>"
+        f"📦 <i>{report.get('tracked_events', 0)} operaciones ({report.get('tracked_from')} a {report.get('tracked_to')})</i>\n"
     ]
-    for idx, m in enumerate(managers, 1):
-        is_me = " (tú)" if m["is_me"] else ""
-        name = (m["manager_name"][:11] + is_me)[:13]
-        tot = m["total_pnl"] // 1_000_000
-        flips = m["total_trades"]
-        win = f"{m['win_rate_pct']:.0f}%" if flips else "-"
-        roi = f"{m['avg_roi_pct']:+.1f}%" if flips else "-"
-        lines.append(f"<code>#{idx:<2}{name:<14}{tot:>+7}M{flips:>6}{win:>7}{roi:>9}</code>")
 
-    lines.append("\n<i>💡 Pulsa en cualquier manager para ver su historial de compra-venta.</i>")
+    medals = ["🥇", "🥈", "🥉"]
+    for idx, m in enumerate(managers, 1):
+        is_me = " <b>(TÚ)</b>" if m.get("is_me") else ""
+        badge = medals[idx - 1] if idx <= 3 else f"<b>#{idx}</b>"
+        name = m.get("manager_name", "Manager")
+        tot = m.get("total_pnl", 0)
+        tot_sign = "+" if tot >= 0 else ""
+        flips = m.get("total_trades", 0)
+        win = f"{m.get('win_rate_pct', 0):.0f}%" if flips else "-"
+        roi = f"{m.get('avg_roi_pct', 0):+.1f}%" if flips else "-"
+
+        lines.append(
+            f"{badge} <b>{name}</b>{is_me}\n"
+            f"  • 📈 <b>P&L Total:</b> {tot_sign}{fmt_eur(tot)}\n"
+            f"  • 🔄 <b>Flips:</b> {flips} ops  |  🎯 <b>Win Rate:</b> {win}\n"
+            f"  • 🚀 <b>ROI Medio:</b> {roi}\n"
+        )
+
+    lines.append("<i>💡 Pulsa en cualquier botón abajo para ver el detalle de operaciones.</i>")
     return "\n".join(lines)
 
 
 def format_manager_history(m: Dict[str, Any]) -> str:
-    tot_sign = "+" if m["total_pnl"] >= 0 else ""
-    real_sign = "+" if m["realized_profit"] >= 0 else ""
-    unreal_sign = "+" if m["unrealized_profit"] >= 0 else ""
+    tot_sign = "+" if m.get("total_pnl", 0) >= 0 else ""
+    real_sign = "+" if m.get("realized_profit", 0) >= 0 else ""
+    unreal_sign = "+" if m.get("unrealized_profit", 0) >= 0 else ""
 
     lines = [
-        f"📊 <b>Historial de Trading: {m['manager_name']}</b> (#{m['position']} - {m['points']} pts)",
-        f"📈 <b>P&L Total:</b> {tot_sign}{m['total_pnl']:,} €",
-        f"  • Realizado (Flips cerrados): {real_sign}{m['realized_profit']:,} €",
-        f"  • Latente (En plantilla): {unreal_sign}{m['unrealized_profit']:,} €\n",
+        f"📊 <b>Historial de Trading: {m.get('manager_name')}</b> (#{m.get('position')} - {m.get('points', 0)} pts)",
+        f"📈 <b>P&L Total:</b> {tot_sign}{fmt_eur(m.get('total_pnl', 0))}",
+        f"  • Realizado (Flips cerrados): {real_sign}{fmt_eur(m.get('realized_profit', 0))}",
+        f"  • Latente (En plantilla): {unreal_sign}{fmt_eur(m.get('unrealized_profit', 0))}\n"
     ]
 
     open_h = m.get("open_holdings", [])
     if open_h:
-        lines.append("🟢 <b>Posiciones en Plantilla (Ganancia Latente):</b>")
+        lines.append("🟢 <b>POSICIONES EN PLANTILLA (Latente):</b>\n")
         for o in open_h:
-            diff_sign = "+" if o["unrealized_profit"] >= 0 else ""
-            lines.append(f"  • <b>{o['name']}</b> ({o['pos']}): Comprado por {o['buy_price']:,} € → Vale {o['market_value']:,} € (<b>{diff_sign}{o['unrealized_profit']:,} €</b> | {o['roi_pct']:+.1f}%)")
-        lines.append("")
+            diff_sign = "+" if o.get("unrealized_profit", 0) >= 0 else ""
+            lines.append(
+                f"• <b>{o['name']}</b> ({o['pos']})\n"
+                f"  💵 Compra: {fmt_eur(o['buy_price'])} → Vale: {fmt_eur(o['market_value'])}\n"
+                f"  📈 Beneficio: <b>{diff_sign}{fmt_eur(o['unrealized_profit'])}</b> ({o['roi_pct']:+.1f}%)\n"
+            )
 
     flips = m.get("completed_flips", [])
     if flips:
-        lines.append(f"🔄 <b>Flips Cerrados ({len(flips)} operaciones | {m['win_rate_pct']:.1f}% Win):</b>")
-        for f in flips[:10]:
-            diff_sign = "+" if f["profit"] >= 0 else ""
-            lines.append(f"  • <b>{f['name']}</b> ({f['pos']}): {f['buy_price']:,} → {f['sell_price']:,} (<b>{diff_sign}{f['profit']:,} €</b> | {f['roi_pct']:+.1f}%)")
-        if len(flips) > 10:
-            lines.append(f"  <i>...y {len(flips) - 10} operaciones más.</i>")
-        lines.append("")
+        lines.append(f"🔄 <b>FLIPS CERRADOS ({len(flips)} ops | {m.get('win_rate_pct', 0):.1f}% Win):</b>\n")
+        for f in flips[:8]:
+            diff_sign = "+" if f.get("profit", 0) >= 0 else ""
+            lines.append(
+                f"• <b>{f['name']}</b> ({f['pos']})\n"
+                f"  💵 {fmt_eur(f['buy_price'])} → {fmt_eur(f['sell_price'])}\n"
+                f"  💰 Ganancia: <b>{diff_sign}{fmt_eur(f['profit'])}</b> ({f['roi_pct']:+.1f}%)\n"
+            )
+        if len(flips) > 8:
+            lines.append(f"<i>...y {len(flips) - 8} operaciones más en el historial.</i>\n")
 
     init_s = m.get("initial_sales", [])
     if init_s:
-        lines.append(f"📦 <b>Ventas de Plantilla Inicial ({len(init_s)} jugadores):</b>")
-        for s in init_s[:6]:
-            lines.append(f"  • {s['name']} ({s['pos']}) vendido por {s['sell_price']:,} € ({s['sell_date']})")
-        if len(init_s) > 6:
-            lines.append(f"  <i>...y {len(init_s) - 6} ventas más.</i>")
+        lines.append(f"📦 <b>VENTAS DE PLANTILLA INICIAL ({len(init_s)}):</b>")
+        for s in init_s[:4]:
+            lines.append(f"• <b>{s['name']}</b> ({s['pos']}): {fmt_eur(s['sell_price'])} <i>({s['sell_date']})</i>")
+        if len(init_s) > 4:
+            lines.append(f"<i>...y {len(init_s) - 4} ventas más.</i>")
 
     return "\n".join(lines)
 
 
 def format_market(market_items: List[Dict[str, Any]]) -> str:
-    lines = [
-        "🛒 <b>Mercado de Fichajes en Vivo</b>\n",
-        "<code>POS JUGADOR            PRECIO   CLÁUSULA</code>",
-        "<code>" + "─" * 44 + "</code>"
-    ]
-    for it in sorted(market_items, key=lambda x: -(x.get("price") or x.get("playerMaster", {}).get("marketValue") or 0))[:20]:
-        pm = it.get("playerMaster") or {}
+    lines = ["🛒 <b>Mercado de Fichajes en Vivo</b>\n"]
+    sorted_items = sorted(market_items, key=lambda x: -(x.get("price") or x.get("playerMaster", {}).get("marketValue") or 0))
+
+    for it in sorted_items[:12]:
+        pm = it.get("playerMaster", {})
         pos = POS.get(pm.get("positionId"), "?")
-        name = (pm.get("nickname") or pm.get("name") or "Unknown")[:16]
+        name = pm.get("nickname") or pm.get("name") or "Jugador"
         price = it.get("price") or pm.get("marketValue") or 0
         clause = it.get("buyoutClause") or pm.get("marketValue") or 0
-        lines.append(f"<code>{pos:<4}{name:<17}{price:>10,}{clause:>13,}</code>")
+        lines.append(
+            f"• <b>{name}</b> ({pos})\n"
+            f"  💵 Precio: {fmt_eur(price)}  |  🔒 Cláusula: {fmt_eur(clause, compact=True)}\n"
+        )
 
     return "\n".join(lines)
 
 
 def format_trends(trends_list: List[Dict[str, Any]]) -> str:
-    up = sorted([p for p in trends_list if p.get("tendencia", 0) > 0], key=lambda x: -x["tendencia"])[:7]
-    down = sorted([p for p in trends_list if p.get("tendencia", 0) < 0], key=lambda x: x["tendencia"])[:7]
+    up = sorted([p for p in trends_list if p.get("tendencia", 0) > 0], key=lambda x: -x["tendencia"])[:6]
+    down = sorted([p for p in trends_list if p.get("tendencia", 0) < 0], key=lambda x: x["tendencia"])[:6]
 
-    lines = ["📈 <b>Tendencias de Mercado (Subidas y Bajadas)</b>\n", "🟢 <b>Mayores Subidas:</b>"]
+    lines = [
+        "📈 <b>Tendencias de Mercado LaLiga</b>\n",
+        "🟢 <b>MAYORES SUBIDAS:</b>"
+    ]
     for p in up:
-        lines.append(f"  • <b>{p.get('nombre', 'Jugador')}</b> ({p.get('equipo', '')}): +{p.get('tendencia', 0):,} €/día")
+        lines.append(f"• <b>{p.get('nombre', 'Jugador')}</b> ({p.get('equipo', '')}): <b>+{fmt_eur(p.get('tendencia', 0))}/día 📈</b>")
 
-    lines.append("\n🔴 <b>Mayores Bajadas:</b>")
+    lines.append("\n🔴 <b>MAYORES BAJADAS:</b>")
     for p in down:
-        lines.append(f"  • <b>{p.get('nombre', 'Jugador')}</b> ({p.get('equipo', '')}): {p.get('tendencia', 0):,} €/día")
+        lines.append(f"• <b>{p.get('nombre', 'Jugador')}</b> ({p.get('equipo', '')}): <b>{fmt_eur(p.get('tendencia', 0))}/día 📉</b>")
 
     return "\n".join(lines)
 

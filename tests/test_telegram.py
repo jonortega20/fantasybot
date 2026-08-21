@@ -53,7 +53,7 @@ class TestTelegramModule(unittest.TestCase):
         }
         formatted = ui.format_team(team_data)
         self.assertIn("Raphinha", formatted)
-        self.assertIn("100,000,000", formatted)
+        self.assertIn("100.000.000", formatted)
 
 
 if __name__ == "__main__":

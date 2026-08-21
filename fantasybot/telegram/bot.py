@@ -583,15 +583,22 @@ class TelegramBot:
             if not flips:
                 text = "🔄 <b>Oportunidades de Reventa (Flip)</b>\n\nNo hay oportunidades claras de reventa en el mercado actual."
             else:
-                lines = ["🔄 <b>Oportunidades de Reventa Recomendadas:</b>\n"]
-                for f in flips[:8]:
+                lines = [
+                    "🔄 <b>Oportunidades de Reventa (Flips)</b>",
+                    "<i>Jugadores con mayor margen proyectado a 7 días:</i>\n"
+                ]
+                for f in flips[:6]:
                     via = f.get("via", "SISTEMA")
                     owner = f.get("owner", "Mercado Libre")
-                    if via == "CLAUSULA":
-                        via_str = f"[CLAUSULA de {owner}]"
-                    else:
-                        via_str = "[MERCADO]"
-                    lines.append(f"  • {via_str} <b>{f['nombre']}</b> ({f['pos']}): Compra {f['buy_price']:,} € → Proy: {f['proyeccion']:,} € (<b>{f['margin']:+,} €</b> | {f['margin_pct']:+.1f}%)")
+                    icon = "⚡" if via == "CLAUSULA" else "🛒"
+                    diff_sign = "+" if f.get("margin", 0) >= 0 else ""
+                    lines.append(
+                        f"{icon} <b>{f['nombre']}</b> ({f['pos']})\n"
+                        f"  • 👤 <b>Origen:</b> {via} <i>({owner})</i>\n"
+                        f"  • 💵 <b>Precio:</b> {ui.fmt_eur(f['buy_price'])}\n"
+                        f"  • 📈 <b>Proy. 7d:</b> {ui.fmt_eur(f['proyeccion'])}\n"
+                        f"  • 💰 <b>Margen:</b> <b>{diff_sign}{ui.fmt_eur(f['margin'])}</b> ({f['margin_pct']:+.1f}%)\n"
+                    )
                 text = "\n".join(lines)
 
             markup = ui.flips_keyboard(flips)
@@ -615,18 +622,25 @@ class TelegramBot:
             tactical = "-".join(str(x) for x in raw_tact)
 
             lines = [
-                f"⚽ <b>Alineación Actual ({tactical}):</b>\n",
+                f"⚽ <b>Alineación Actual ({tactical})</b>\n",
             ]
             current_ids = set()
-            for pos_key, pos_label in [("goalkeeper", "POR"), ("defender", "DEF"), ("midfield", "MED"), ("striker", "DEL")]:
+            for pos_key, pos_label, pos_icon in [
+                ("goalkeeper", "PORTERO", "🧤"),
+                ("defender", "DEFENSAS", "🛡"),
+                ("midfield", "MEDIOS", "🎯"),
+                ("striker", "DELANTEROS", "⚡")
+            ]:
                 players_list = form_dict.get(pos_key, [])
-                for p in players_list:
-                    pm = p.get("playerMaster") or {}
-                    ptid = p.get("playerTeamId") or pm.get("id")
-                    if ptid:
-                        current_ids.add(str(ptid))
-                    pname = pm.get("nickname") or pm.get("name") or "Jugador"
-                    lines.append(f"  • {pos_label} <b>{pname}</b>")
+                if players_list:
+                    pnames = []
+                    for p in players_list:
+                        pm = p.get("playerMaster") or {}
+                        ptid = p.get("playerTeamId") or pm.get("id")
+                        if ptid:
+                            current_ids.add(str(ptid))
+                        pnames.append(pm.get("nickname") or pm.get("name") or "Jugador")
+                    lines.append(f"{pos_icon} <b>{pos_label}:</b> " + " • ".join(f"<b>{n}</b>" for n in pnames))
 
             # Calculate optimal lineup recommendation
             can_apply = False
@@ -648,15 +662,15 @@ class TelegramBot:
                     lines.append("<i>No necesitas realizar ningún cambio para la próxima jornada.</i>")
                 else:
                     can_apply = True
-                    lines.append(f"\n🌟 <b>Alineación Óptima Recomendada ({opt_tactical}):</b>")
+                    lines.append(f"\n🌟 <b>Alineación Óptima Recomendada ({opt_tactical})</b>\n")
                     gk_name = best["goalkeeper"].get("nombre") or best["goalkeeper"].get("name")
-                    lines.append(f"  • POR <b>{gk_name}</b>")
-                    for d_p in best.get("defender", []):
-                        lines.append(f"  • DEF <b>{d_p.get('nombre') or d_p.get('name')}</b>")
-                    for m_p in best.get("midfield", []):
-                        lines.append(f"  • MED <b>{m_p.get('nombre') or m_p.get('name')}</b>")
-                    for s_p in best.get("striker", []):
-                        lines.append(f"  • DEL <b>{s_p.get('nombre') or s_p.get('name')}</b>")
+                    lines.append(f"🧤 <b>PORTERO:</b> <b>{gk_name}</b>")
+                    defs = [p.get("nombre") or p.get("name") for p in best.get("defender", [])]
+                    lines.append(f"🛡 <b>DEFENSAS:</b> " + " • ".join(f"<b>{n}</b>" for n in defs))
+                    mids = [p.get("nombre") or p.get("name") for p in best.get("midfield", [])]
+                    lines.append(f"🎯 <b>MEDIOS:</b> " + " • ".join(f"<b>{n}</b>" for n in mids))
+                    strikers = [p.get("nombre") or p.get("name") for p in best.get("striker", [])]
+                    lines.append(f"⚡ <b>DELANTEROS:</b> " + " • ".join(f"<b>{n}</b>" for n in strikers))
             except Exception as opt_err:
                 lines.append(f"\n<i>(Aviso de optimización: {opt_err})</i>")
 
