@@ -60,11 +60,17 @@ def evaluate(element, index, horizon):
 
     if element["discr"] == "marketPlayerLeague":
         via, buy_price = "SISTEMA", element.get("salePrice") or trend["valor"]
+        owner = "Mercado Libre"
     else:
         via = "CLAUSULA"
         buy_price = element.get("playerTeam", {}).get("buyoutClause")
         if not buy_price:
             return None
+        owner = (
+            element.get("sellerTeam", {}).get("manager", {}).get("managerName")
+            or element.get("playerTeam", {}).get("manager", {}).get("managerName")
+            or "Rival"
+        )
 
     proj = project(trend, horizon)
     margin = proj * (1 - SELL_COMMISSION) - buy_price
@@ -74,6 +80,7 @@ def evaluate(element, index, horizon):
         "player_id": pm.get("id"),
         "pos": POS.get(pm.get("positionId"), "?"),
         "via": via,
+        "owner": owner,
         "valor_actual": trend["valor"],
         "buy_price": buy_price,
         "proyeccion": round(proj),

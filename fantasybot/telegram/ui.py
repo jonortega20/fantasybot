@@ -65,10 +65,11 @@ def flips_keyboard(flips: List[Dict[str, Any]]) -> Dict[str, Any]:
         name = f.get("nombre")
         via = f.get("via", "SISTEMA")
         pid = f.get("player_id")
+        owner = f.get("owner", "Rival")
         if via == "SISTEMA" and mid and amt:
             rows.append([{"text": f"💰 Pujar por {name} ({amt:,} €)", "callback_data": f"bid_{mid}_{amt}"}])
         elif via == "CLAUSULA" and pid and amt:
-            rows.append([{"text": f"⚡ Clausulazo a {name} ({amt:,} €)", "callback_data": f"clause_{pid}_{amt}"}])
+            rows.append([{"text": f"⚡ Clausulazo a {name} ({owner} | {amt:,} €)", "callback_data": f"clause_{pid}_{amt}"}])
     if any(f.get("via") == "SISTEMA" for f in flips):
         rows.append([{"text": "🚀 Auto-Pujar por Flips de Mercado", "callback_data": "action_auto_bids"}])
     rows.append([{"text": "🔙 Menú Principal", "callback_data": "cmd_menu"}])

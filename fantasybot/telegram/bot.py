@@ -585,7 +585,12 @@ class TelegramBot:
             else:
                 lines = ["🔄 <b>Oportunidades de Reventa Recomendadas:</b>\n"]
                 for f in flips[:8]:
-                    via_str = f"[{f['via']}]"
+                    via = f.get("via", "SISTEMA")
+                    owner = f.get("owner", "Mercado Libre")
+                    if via == "CLAUSULA":
+                        via_str = f"[CLAUSULA de {owner}]"
+                    else:
+                        via_str = "[MERCADO]"
                     lines.append(f"  • {via_str} <b>{f['nombre']}</b> ({f['pos']}): Compra {f['buy_price']:,} € → Proy: {f['proyeccion']:,} € (<b>{f['margin']:+,} €</b> | {f['margin_pct']:+.1f}%)")
                 text = "\n".join(lines)
 
