@@ -47,11 +47,31 @@ All notable changes to the **fantasybot** project for rival tracking, transfer a
 - **`--json` flags**: Structured JSON export for programmatic consumption (`rivals --json`, `history --json`).
 - **`--initial-budget` flag**: Allows custom league starting budget overrides.
 
-#### 6. Multi-User Telegram Bot (`fantasybot/telegram/`)
-- **`fantasybot/telegram/sessions.py`**: Multi-tenant session store with isolated tokens per `chat_id` and automatic OAuth2 PKCE login.
-- **`fantasybot/telegram/ui.py`**: Rich Telegram message formatters and inline keyboards.
-- **`fantasybot/telegram/bot.py`**: Zero-dependency long-polling daemon.
-- **`python -m fantasybot telegram [--token TOKEN]`**: CLI runner for the Telegram bot.
+#### 6. Multi-User Telegram Bot & Interactive Autopilot (`fantasybot/telegram/`)
+- **Multi-Tenant Sessions (`fantasybot/telegram/sessions.py`)**:
+  - Multi-user session storage with isolated tokens per `chat_id` and automatic OAuth2 PKCE login.
+  - Multi-league switcher (`/leagues`) with dynamic league selection and persistent active league tracking.
+  - User preference toggles (`get_user_settings`, `toggle_user_setting`) for personalized alert configuration.
+- **Interactive Action Engine (`fantasybot/telegram/bot.py`)**:
+  - **1-Click Lineup Applicator**: Directly sets optimal tactical XI on official LaLiga Fantasy accounts.
+  - **Single-Tap Bids & Buyouts**: Distinguishes between auction market bids (`make_bid`) and manager buyout clauses (`pay_buyout_clause`) with dedicated buttons and owner tags.
+  - **Squad Player Sales**: List players on the transfer market with one click (`/sell`).
+  - **1-Click Autopilot**: Runs lineup optimization, submits high-margin flip bids within balance limits, and cancels declining bids (`/autopilot` / `/run`).
+- **Mobile-First UX & Visual Card Redesign (`fantasybot/telegram/ui.py`)**:
+  - Overhauled all command outputs for mobile legibility, replacing monospaced tables with structured card layouts.
+  - Spanish currency formatting (`1.000.000 €` / `14,2M €`).
+  - Categorized squad breakdown by position (`🧤 PORTEROS`, `🛡 DEFENSAS`, `🎯 CENTROCAMPISTAS`, `⚡ DELANTEROS`).
+  - Flip opportunity cards with manager ownership indicator, 7-day projections, and expected profit margin.
+  - Ranked rival cards with podium medals (🥇, 🥈, 🥉), estimated liquid cash, and squad valuations.
+- **Background Notification & Alert Worker (`fantasybot/telegram/notifications.py`)**:
+  - Background daemon thread checking for new profitable market flips and automatic matchday lineup optimization.
+  - Interactive settings panel (`/settings`) with instant toggle buttons for flip alerts, matchday reminders, and auto-lineups.
+- **User Feedback & Bug Inbox (`fantasybot/telegram/feedback.py`)**:
+  - `/bug <msg>` and `/sugerencia <msg>` commands for users to send feedback directly.
+  - Persistent JSON Lines feedback storage (`.state/feedback.jsonl`).
+  - Real-time forwarding of reports to admin chat ID.
+  - Admin inbox viewer command (`/reportes` / `/admin_feedback`).
+- **Zero External Dependencies**: Pure Python standard library implementation (`urllib.request`, `json`, `threading`).
 
 #### 7. LLM Agent Integration (`fantasybot/agent.py`)
 - Included league rival financial data and clause increases into `review()` dictionary and CLI summary output.
