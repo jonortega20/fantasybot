@@ -11,6 +11,7 @@
 
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -599,6 +600,13 @@ def cmd_watch(args):
     if args.host in ("127.0.0.1", "localhost"):
         print(f"  (remote VPS: tunnel  ssh -L {args.port}:127.0.0.1:{args.port} <server>)")
 
+
+def cmd_telegram(args):
+    """Run the multi-user Telegram Bot daemon."""
+    from .telegram.bot import run_bot
+    token = args.token or os.environ.get("TELEGRAM_BOT_TOKEN") or "8700485421:AAEtiHr9jNynbMP5IvOTpxqARfUKIFr2GXQ"
+    run_bot(token)
+
     def fire():
         time.sleep(1.2)  # let the UI connect the stream before starting
         if args.hermes:
@@ -746,6 +754,10 @@ def build_parser():
     sr = sub.add_parser("bid-run", help="run the bid plan at close (for cron)")
     sr.add_argument("--dry-run", action="store_true")
     sr.set_defaults(func=cmd_bid_run)
+
+    tg = sub.add_parser("telegram", help="run the multi-user Telegram bot daemon")
+    tg.add_argument("--token", help="Telegram Bot Token (or TELEGRAM_BOT_TOKEN env)")
+    tg.set_defaults(func=cmd_telegram)
 
     return p
 

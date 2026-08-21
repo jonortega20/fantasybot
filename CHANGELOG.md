@@ -47,12 +47,18 @@ All notable changes to the **fantasybot** project for rival tracking, transfer a
 - **`--json` flags**: Structured JSON export for programmatic consumption (`rivals --json`, `history --json`).
 - **`--initial-budget` flag**: Allows custom league starting budget overrides.
 
-#### 6. LLM Agent Integration (`fantasybot/agent.py`)
+#### 6. Multi-User Telegram Bot (`fantasybot/telegram/`)
+- **`fantasybot/telegram/sessions.py`**: Multi-tenant session store with isolated tokens per `chat_id` and automatic OAuth2 PKCE login.
+- **`fantasybot/telegram/ui.py`**: Rich Telegram message formatters and inline keyboards.
+- **`fantasybot/telegram/bot.py`**: Zero-dependency long-polling daemon.
+- **`python -m fantasybot telegram [--token TOKEN]`**: CLI runner for the Telegram bot.
+
+#### 7. LLM Agent Integration (`fantasybot/agent.py`)
 - Included league rival financial data and clause increases into `review()` dictionary and CLI summary output.
 
-#### 7. Unit Tests (`tests/test_rivals.py`, `tests/test_history.py`)
-- Added comprehensive unit tests covering activity parsing, clause protection analysis, rival accounting, clause diffing, and trade ROI calculations.
-- All **53/53 unit tests** passing in test suite.
+#### 8. Unit Tests (`tests/test_rivals.py`, `tests/test_history.py`, `tests/test_telegram.py`)
+- Added comprehensive unit tests covering activity parsing, clause protection analysis, rival accounting, trade ROI, and Telegram sessions/UI.
+- All **56/56 unit tests** passing in test suite.
 
-#### 8. Documentation (`README.md`)
-- Updated README with usage instructions for `python -m fantasybot rivals` and `python -m fantasybot history`.
+#### 9. Documentation (`README.md`)
+- Updated README with usage instructions for `rivals`, `history`, and `telegram`, plus attribution credits to original author Jon Ortega.

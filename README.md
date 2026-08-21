@@ -159,6 +159,26 @@ hermes/                autonomous-agent assets (SOUL, USER, MEMORY, skill)
 deploy/                installer and VPS deployment guide
 ```
 
+## 🤖 Telegram Bot (Multi-User, Mobile & Autopilot)
+
+`fantasybot` includes a native multi-user Telegram bot so anyone can manage their squad, view rival finances, execute flips, and automate their team from their phone without running code locally:
+
+```bash
+python -m fantasybot telegram [--token TOKEN]
+```
+
+- **Live Bot:** [@LaLigaFantasyTelegramBot](https://t.me/LaLigaFantasyTelegramBot)
+- **Zero external dependencies:** Pure Python standard library (`urllib`).
+- **Interactive UI & Buttons:** Inline buttons for squad viewing, rival inspection, market trends, and lineups.
+- **1-Click Lineup Applicator:** Optimize and apply your best XI directly to your official LaLiga Fantasy account.
+- **Interactive Bidding & Buyouts:** Place auction bids or execute buyout clauses with a single tap.
+- **Player Sales:** List squad players on the official transfer market.
+- **1-Click Autopilot (`/autopilot`):** Sets optimal lineup, bids on profitable flips within available balance, and pulls unprofitable bids.
+- **Multi-League Switcher (`/leagues`):** Seamlessly switch between all your leagues.
+- **Push Notification Engine (`/settings`):** Background worker for market flip alerts and matchday reminders.
+- **Secure multi-tenant OAuth:** Each user logs in through official LaLiga OAuth PKCE with isolated sessions.
+- **Bug & Suggestion Inbox:** Integrated `/bug` and `/sugerencia` tracker with instant admin notifications and `/reportes`.
+
 ## Disclaimer
 
 **Unofficial API:** LaLiga may change it without notice, and automating the game
@@ -166,6 +186,10 @@ may go against its terms of use. This is a personal, non-commercial project with
 intention whatsoever to act against LaLiga or to harm the game in any way. The
 software is provided "as is", without warranty of any kind; you use it at your own
 risk and are solely responsible for its use.
+
+## 👏 Acknowledgments & Credits
+
+This project builds upon the open-source foundation of [fantasybot by Jon Ortega (@jonortega20)](https://github.com/jonortega20/fantasybot). Huge thanks to Jon for creating the original API client, lineup optimizer, and deterministic architecture!
 
 ## Contributing
 
