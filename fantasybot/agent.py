@@ -66,6 +66,11 @@ def clause_targets(market, team, prob_index):
         prob = info.get("prob") if info else None
         if prob is not None and prob < MIN_CLAUSE_PROB:
             continue  # benchwarmer: a buyout on him is wasted money, don't recommend it
+        # If his owner already has him ON SALE, bidding is the cheaper way in: the
+        # clause is a ~1.67x premium and it is locked for days, while the sale is open
+        # now and starts at his value. Recommending the clause without checking this
+        # is how you end up paying 4.5M for a keeper listed at 2.7M.
+        on_sale = el.get("salePrice") if el.get("status") == "on_sale" else None
         targets.append({
             "nombre": pm.get("nickname") or pm.get("name"),
             "player_id": pm["id"],
@@ -74,6 +79,12 @@ def clause_targets(market, team, prob_index):
             "unlock": unlock,
             "prob": prob,
             "reason": f"fills a {pos} gap",
+            # cheaper route, when there is one
+            "market_id": el.get("id") if on_sale else None,
+            "sale_price": on_sale,
+            "sale_expires": el.get("expirationDate") if on_sale else None,
+            "cheaper_via_bid": bool(on_sale and on_sale < clause),
+            "saving_vs_clause": (clause - on_sale) if (on_sale and on_sale < clause) else 0,
         })
     targets.sort(key=lambda t: (t["prob"] or 0), reverse=True)
     return targets
@@ -90,9 +101,16 @@ def _sync_tasks(gaps, targets, sells, lineup_changed):
             state.complete_by_key(key)
     # buyout targets (and close the ones that no longer apply)
     for t in targets:
-        state.add_task(
-            f"Buyout {t['nombre']} ({t['pos']}) for {t['clause']:,} "
-            f"when its clause opens.", due=t["unlock"], key=f"clause:{t['player_id']}")
+        if t.get("cheaper_via_bid"):
+            text = (f"Bid for {t['nombre']} ({t['pos']}): he's ON SALE at "
+                    f"{t['sale_price']:,}, {t['saving_vs_clause']:,} less than his "
+                    f"{t['clause']:,} clause. Closes {t['sale_expires']}.")
+            due = t["sale_expires"]
+        else:
+            text = (f"Buyout {t['nombre']} ({t['pos']}) for {t['clause']:,} "
+                    f"when its clause opens.")
+            due = t["unlock"]
+        state.add_task(text, due=due, key=f"clause:{t['player_id']}")
     state.complete_missing("clause:", {f"clause:{t['player_id']}" for t in targets})
     # recommended sales
     for s in sells:

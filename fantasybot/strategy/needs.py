@@ -63,10 +63,20 @@ def candidates(client, league_id, position, prob_index=None, money=None, owned=N
             continue
         if pm.get("id") in owned:
             continue  # already yours
+        clause = sale = None
         if el["discr"] == "marketPlayerLeague":
             via, price = "SISTEMA", el.get("salePrice") or pm.get("marketValue")
         else:
-            via, price = "CLAUSULA", el.get("playerTeam", {}).get("buyoutClause")
+            clause = el.get("playerTeam", {}).get("buyoutClause")
+            # A player another manager has listed can simply be BID for, at his sale
+            # price. That is nearly always cheaper than his clause (~1.67x value) and
+            # available now instead of when the lock expires. Offering only the clause
+            # here was overpricing every signing from another squad.
+            sale = el.get("salePrice") if el.get("status") == "on_sale" else None
+            if sale and (clause is None or sale < clause):
+                via, price = "PUJA", sale
+            else:
+                via, price = "CLAUSULA", clause
         if not price:
             continue
         info = match_name(pm.get("nickname", ""), pm.get("name", ""), prob_index)
@@ -84,6 +94,10 @@ def candidates(client, league_id, position, prob_index=None, money=None, owned=N
             "disponible": disponible,
             "valor": pm.get("marketValue"),
             "affordable": (money is None or price <= money),
+            # both routes, so the caller can see what the alternative would have cost
+            "clause": clause,
+            "sale_price": sale,
+            "expires": el.get("expirationDate"),
         })
     # sort: available starters first, then by probability and value
     out.sort(key=lambda c: (c["disponible"], c["prob"] or 0, c["valor"] or 0),
@@ -101,7 +115,9 @@ def advise(client, league_id, team, days_to_matchday=None):
     for pos in report["gaps"]:
         cands = candidates(client, league_id, pos, prob_index, money, owned)
         for c in cands:
-            # recommended bid cap: price, raised by urgency (system only)
-            c["max_bid"] = round(c["price"] * mult) if c["via"] == "SISTEMA" else c["price"]
+            # recommended cap: the price, raised by urgency when there is bidding
+            # involved. A clause is a fixed amount — urgency cannot change it.
+            c["max_bid"] = (round(c["price"] * mult)
+                            if c["via"] in ("SISTEMA", "PUJA") else c["price"])
         report["suggestions"][pos] = cands
     return report
