@@ -103,7 +103,9 @@ def _post_token(body: dict) -> dict:
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         method="POST")
     try:
-        with urllib.request.urlopen(req) as resp:
+        # Without a timeout a stalled token refresh hangs the caller forever; a
+        # cron-driven bid run wedged this way once and never placed its bids.
+        with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")
