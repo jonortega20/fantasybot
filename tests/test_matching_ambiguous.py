@@ -25,6 +25,54 @@ class TestAmbiguousMatch(unittest.TestCase):
         # "Etta Eyong" matches exactly one key -> still resolved
         self.assertEqual(match_name("Etta Eyong", "", index)["v"], 1)
 
+    def test_short_token_needs_a_whole_word(self):
+        # "oso" is inside cardOSO and OSOrio but is neither man's name
+        index = index_by_name([{"nombre": "johnny cardoso", "v": 1},
+                               {"nombre": "abiel osorio", "v": 2}])
+        self.assertIsNone(match_name("Oso", "", index))
+        self.assertEqual(match_name("Oso", "", index_by_name(
+            [{"nombre": "joaquin oso", "v": 3}]))["v"], 3)
+
+    def test_abbreviations_are_prefixes(self):
+        index = index_by_name([{"nombre": "javier hernandez", "v": 1},
+                               {"nombre": "adria altimira", "v": 2},
+                               {"nombre": "adria pedrosa", "v": 3},
+                               {"nombre": "pedro bigas", "v": 4}])
+        self.assertEqual(match_name("Javi Hernández", "", index)["v"], 1)
+        self.assertEqual(match_name("A. Alti", "", index)["v"], 2)
+        # a surname is not an abbreviation of a shorter first name
+        self.assertEqual(match_name("Pedrosa", "", index)["v"], 3)
+        # "Pedro" is both a whole word and a prefix of pedrosa: ambiguous
+        self.assertIsNone(match_name("Pedro", "", index))
+
+    def test_initials_must_agree_with_the_key(self):
+        index = index_by_name([{"nombre": "david jimenez", "v": 1},
+                               {"nombre": "isra dominguez", "v": 2},
+                               {"nombre": "johnny cardoso", "v": 3},
+                               {"nombre": "alberto moleiro", "v": 4}])
+        self.assertEqual(match_name("D. Jiménez", "", index)["v"], 1)
+        self.assertIsNone(match_name("J. David", "", index))
+        self.assertIsNone(match_name("C. Dominguez", "", index))
+        self.assertEqual(match_name("John C.", "", index)["v"], 3)
+        self.assertIsNone(match_name("Alberto F.", "", index))
+
+    def test_initials_are_ignored_when_the_key_has_no_spare_word(self):
+        index = index_by_name([{"nombre": "terrats", "v": 1},
+                               {"nombre": "pathe ciss", "v": 2}])
+        self.assertEqual(match_name("R. Terrats", "", index)["v"], 1)
+        self.assertEqual(match_name("Pathé I. Ciss", "", index)["v"], 2)
+        # a two-word key still has to account for the initial
+        self.assertIsNone(match_name("J. David Jimenez", "",
+                                     index_by_name([{"nombre": "david jimenez"}])))
+
+    def test_several_initials_keep_their_order(self):
+        index = index_by_name([{"nombre": "carlos david smith", "v": 1},
+                               {"nombre": "smith david carlos", "v": 2}])
+        self.assertIsNone(match_name("D. C. Smith", "", index))
+        self.assertEqual(match_name("C. D. Smith", "", index)["v"], 1)
+        self.assertIsNone(match_name("Smith C. D.", "", index))
+        self.assertEqual(match_name("Smith D. C.", "", index)["v"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
